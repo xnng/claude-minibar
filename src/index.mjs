@@ -85,7 +85,9 @@ function formatDuration(ms) {
 }
 
 function getSessionDuration(transcriptPath) {
-  if (!transcriptPath || !existsSync(transcriptPath)) return null
+  if (!transcriptPath) return null
+  // 文件尚未创建（新会话首次渲染），直接返回 <1m
+  if (!existsSync(transcriptPath)) return '<1m'
   try {
     const fileSize = statSync(transcriptPath).size
     if (fileSize > 0) {
