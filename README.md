@@ -15,17 +15,20 @@ Minimal 2-line statusline for [Claude Code](https://docs.anthropic.com/en/docs/c
 
 ## Install
 
-```bash
-/install-plugin xnng/claude-minibar
+In Claude Code, run:
+
+```
+/plugin marketplace add xnng/claude-minibar
+/plugin install claude-minibar@claude-minibar
 ```
 
-After installing, run the setup command in Claude Code:
+After installing, run the setup command:
 
 ```
 /claude-minibar:setup
 ```
 
-This will configure your `statusLine` in `settings.json` automatically.
+This will configure your `statusLine` in `settings.json` automatically. Restart Claude Code to see the statusline.
 
 ## How It Works
 
