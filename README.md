@@ -44,11 +44,14 @@ This will configure your `statusLine` in `settings.json` automatically. Restart 
 
 ## Usage Quota
 
-Usage quota (5h/7d) requires a Pro/Max/Team subscription. The data flow:
+Usage quota (5h/7d) requires a Pro/Max/Team subscription. The credential flow with fallback:
 
-1. **Read credentials** — OAuth token from macOS Keychain, stored by Claude Code CLI or [Claude Code Desktop](https://claude.ai/download)
-2. **Call API** — Fetches usage from Anthropic OAuth API
-3. **Cache** — Successful results are cached for 5 minutes. If the API is temporarily unavailable (rate-limited, network error), the last successful result is shown until the next successful refresh
+1. **File credentials** (`~/.claude/.credentials.json`) — OAuth token stored by Claude Code CLI login. This is the primary source and works for most users.
+2. **API call** — Fetches usage from Anthropic OAuth API using the token above.
+3. **429 fallback** — If the API returns 429 (rate-limited), minibar retries with credentials from **macOS Keychain** (stored by [Claude Code Desktop](https://claude.ai/download)). This requires the Desktop app to be installed and logged in.
+4. **Cache** — Successful results are cached for 5 minutes. During API failures, the last successful result continues to display.
+
+> **Note**: If you experience persistent 429 errors, installing Claude Code Desktop provides an alternative credential source that may resolve the issue.
 
 API key users (no OAuth login) won't see the usage line — this is expected.
 

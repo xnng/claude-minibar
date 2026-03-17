@@ -227,6 +227,33 @@ function getLastGoodData() {
   } catch { return null }
 }
 
+/**
+ * 解析凭据数据（文件和 Keychain 共用）
+ */
+function parseCredentials(data) {
+  const token = data.claudeAiOauth?.accessToken
+  const sub = data.claudeAiOauth?.subscriptionType ?? ''
+  if (!token) return null
+  const expiresAt = data.claudeAiOauth?.expiresAt
+  if (expiresAt != null && expiresAt <= Date.now()) return null
+  return { token, subscriptionType: sub }
+}
+
+/**
+ * 从 ~/.claude/.credentials.json 读取凭据（CLI 登录写入）
+ */
+function readFileToken() {
+  try {
+    const credPath = join(HOME, '.claude', '.credentials.json')
+    if (!existsSync(credPath)) return null
+    const data = JSON.parse(readFileSync(credPath, 'utf8'))
+    return parseCredentials(data)
+  } catch { return null }
+}
+
+/**
+ * 从 macOS Keychain 读取凭据（Claude Code Desktop 写入）
+ */
 function readKeychainToken() {
   if (process.platform !== 'darwin') return null
   const tryRead = (args) => {
@@ -234,13 +261,7 @@ function readKeychainToken() {
       encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 3000
     }).trim()
     if (!raw) return null
-    const data = JSON.parse(raw)
-    const token = data.claudeAiOauth?.accessToken
-    const sub = data.claudeAiOauth?.subscriptionType ?? ''
-    if (!token) return null
-    const expiresAt = data.claudeAiOauth?.expiresAt
-    if (expiresAt != null && expiresAt <= Date.now()) return null
-    return { token, subscriptionType: sub }
+    return parseCredentials(JSON.parse(raw))
   }
   try {
     const username = userInfo().username.trim()
@@ -263,6 +284,10 @@ function getPlanName(sub) {
   return sub.charAt(0).toUpperCase() + sub.slice(1)
 }
 
+/**
+ * 调用 Anthropic Usage API
+ * 返回 { data, status } 以便区分 429 和其他错误
+ */
 function fetchUsageApi(accessToken) {
   return new Promise((resolve) => {
     const req = https.request({
@@ -279,12 +304,16 @@ function fetchUsageApi(accessToken) {
       let data = ''
       res.on('data', (c) => { data += c.toString() })
       res.on('end', () => {
-        if (res.statusCode !== 200) { resolve(null); return }
-        try { resolve(JSON.parse(data)) } catch { resolve(null) }
+        if (res.statusCode !== 200) {
+          resolve({ data: null, status: res.statusCode })
+          return
+        }
+        try { resolve({ data: JSON.parse(data), status: 200 }) }
+        catch { resolve({ data: null, status: 0 }) }
       })
     })
-    req.on('error', () => resolve(null))
-    req.on('timeout', () => { req.destroy(); resolve(null) })
+    req.on('error', () => resolve({ data: null, status: 0 }))
+    req.on('timeout', () => { req.destroy(); resolve({ data: null, status: 0 }) })
     req.end()
   })
 }
@@ -310,29 +339,59 @@ function clamp(v) {
   return Math.round(Math.max(0, Math.min(100, v)))
 }
 
+/**
+ * 获取 usage 数据，两级凭据回退：
+ * 1. 文件凭据（~/.claude/.credentials.json，CLI 登录写入）→ 调 API
+ * 2. 若 429 → Keychain 凭据（Claude Code Desktop 写入）→ 调 API
+ * 3. 都失败 → 用缓存兜底，等下次重试
+ */
 async function getUsageData() {
   const cached = readUsageCache()
   if (cached && !cached._stale) return cached
-  const creds = readKeychainToken()
-  if (!creds) return cached || null
-  const planName = getPlanName(creds.subscriptionType)
-  if (!planName) return cached || null
-  const apiData = await fetchUsageApi(creds.token)
-  if (!apiData) {
-    const lastGood = getLastGoodData()
-    const fail = { planName, fiveHour: null, sevenDay: null, apiUnavailable: true }
-    writeUsageCache(fail, lastGood)
-    return lastGood || cached || null
+
+  // 收集可用凭据：文件优先，Keychain 兜底
+  const credSources = []
+  const fileCreds = readFileToken()
+  if (fileCreds) credSources.push(fileCreds)
+  const keychainCreds = readKeychainToken()
+  // 避免重复（同一个 token）
+  if (keychainCreds && keychainCreds.token !== fileCreds?.token) {
+    credSources.push(keychainCreds)
   }
-  const result = {
-    planName,
-    fiveHour: clamp(apiData.five_hour?.utilization),
-    sevenDay: clamp(apiData.seven_day?.utilization),
-    fiveHourResetAt: apiData.five_hour?.resets_at || null,
-    sevenDayResetAt: apiData.seven_day?.resets_at || null,
+
+  if (credSources.length === 0) return cached || null
+
+  // 依次尝试每个凭据源
+  for (const creds of credSources) {
+    const planName = getPlanName(creds.subscriptionType)
+    if (!planName) continue
+
+    const { data: apiData, status } = await fetchUsageApi(creds.token)
+
+    if (apiData) {
+      // API 成功
+      const result = {
+        planName,
+        fiveHour: clamp(apiData.five_hour?.utilization),
+        sevenDay: clamp(apiData.seven_day?.utilization),
+        fiveHourResetAt: apiData.five_hour?.resets_at || null,
+        sevenDayResetAt: apiData.seven_day?.resets_at || null,
+      }
+      writeUsageCache(result, result)
+      return result
+    }
+
+    // 非 429 错误（网络问题等），不再尝试下一个凭据
+    if (status !== 429) break
+    // 429 → 继续尝试下一个凭据源
   }
-  writeUsageCache(result, result)
-  return result
+
+  // 所有凭据都失败
+  const lastGood = getLastGoodData()
+  const planName = getPlanName(credSources[0].subscriptionType) || 'Unknown'
+  const fail = { planName, fiveHour: null, sevenDay: null, apiUnavailable: true }
+  writeUsageCache(fail, lastGood)
+  return lastGood || cached || null
 }
 
 // ── Main ──
