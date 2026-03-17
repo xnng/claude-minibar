@@ -44,16 +44,42 @@ This will configure your `statusLine` in `settings.json` automatically. Restart 
 
 ## Usage Quota
 
-Usage quota (5h/7d) requires a Pro/Max/Team subscription. The credential flow with fallback:
+Usage quota (5h/7d) requires a Pro/Max/Team subscription. API key users won't see this line.
 
-1. **File credentials** (`~/.claude/.credentials.json`) — OAuth token stored by Claude Code CLI login. This is the primary source and works for most users.
-2. **API call** — Fetches usage from Anthropic OAuth API using the token above.
-3. **429 fallback** — If the API returns 429 (rate-limited), minibar retries with credentials from **macOS Keychain** (stored by [Claude Code Desktop](https://claude.ai/download)). This requires the Desktop app to be installed and logged in.
-4. **Cache** — Successful results are cached for 5 minutes. During API failures, the last successful result continues to display.
+```mermaid
+flowchart TD
+    A[statusline render] --> B{self cache valid?}
+    B -->|"< 5min"| Z[return cached data]
+    B -->|"failed cache < 60s\nwith lastGoodData"| Z2[return lastGoodData]
+    B -->|expired / empty| C{read file credentials\n~/.claude/.credentials.json}
 
-> **Note**: If you experience persistent 429 errors, installing Claude Code Desktop provides an alternative credential source that may resolve the issue.
+    C -->|found| D[call Anthropic Usage API]
+    C -->|not found| F
 
-API key users (no OAuth login) won't see the usage line — this is expected.
+    D -->|200 OK| E[write cache, return data]
+    D -->|429| F{read Keychain credentials\nClaude Code Desktop}
+    D -->|other error| G
+
+    F -->|found| H[call Anthropic Usage API]
+    F -->|not found| G
+
+    H -->|200 OK| E
+    H -->|failed| G
+
+    G{lastGoodData exists?}
+    G -->|yes| I[write failed cache 60s\nreturn lastGoodData]
+    G -->|no| J[no Usage line displayed\nretry on next render]
+
+    style F fill:#f9f0ff,stroke:#9b59b6
+    style Z fill:#e8f5e9,stroke:#4caf50
+    style Z2 fill:#e8f5e9,stroke:#4caf50
+    style E fill:#e8f5e9,stroke:#4caf50
+    style J fill:#fff3e0,stroke:#ff9800
+```
+
+**Refresh**: Successful cache expires after **5 minutes**. Failed cache expires after **60 seconds**. The statusline re-renders on every tool call, triggering a refresh when cache expires.
+
+**Degradation**: File credentials (CLI login) are the primary source. Keychain credentials (Desktop) are only used as a fallback when the API returns 429. If you experience persistent 429 errors, installing [Claude Code Desktop](https://claude.ai/download) provides an alternative credential source.
 
 ## Requirements
 
