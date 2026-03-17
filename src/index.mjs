@@ -340,58 +340,73 @@ function clamp(v) {
 }
 
 /**
- * 获取 usage 数据，两级凭据回退：
- * 1. 文件凭据（~/.claude/.credentials.json，CLI 登录写入）→ 调 API
- * 2. 若 429 → Keychain 凭据（Claude Code Desktop 写入）→ 调 API
- * 3. 都失败 → 用缓存兜底，等下次重试
+ * 将 API 响应转为 usage 结果并写入缓存
  */
-async function getUsageData() {
-  const cached = readUsageCache()
-  if (cached && !cached._stale) return cached
-
-  // 收集可用凭据：文件优先，Keychain 兜底
-  const credSources = []
-  const fileCreds = readFileToken()
-  if (fileCreds) credSources.push(fileCreds)
-  const keychainCreds = readKeychainToken()
-  // 避免重复（同一个 token）
-  if (keychainCreds && keychainCreds.token !== fileCreds?.token) {
-    credSources.push(keychainCreds)
+function buildUsageResult(planName, apiData) {
+  const result = {
+    planName,
+    fiveHour: clamp(apiData.five_hour?.utilization),
+    sevenDay: clamp(apiData.seven_day?.utilization),
+    fiveHourResetAt: apiData.five_hour?.resets_at || null,
+    sevenDayResetAt: apiData.seven_day?.resets_at || null,
   }
+  writeUsageCache(result, result)
+  return result
+}
 
-  if (credSources.length === 0) return cached || null
-
-  // 依次尝试每个凭据源
-  for (const creds of credSources) {
-    const planName = getPlanName(creds.subscriptionType)
-    if (!planName) continue
-
-    const { data: apiData, status } = await fetchUsageApi(creds.token)
-
-    if (apiData) {
-      // API 成功
-      const result = {
-        planName,
-        fiveHour: clamp(apiData.five_hour?.utilization),
-        sevenDay: clamp(apiData.seven_day?.utilization),
-        fiveHourResetAt: apiData.five_hour?.resets_at || null,
-        sevenDayResetAt: apiData.seven_day?.resets_at || null,
-      }
-      writeUsageCache(result, result)
-      return result
-    }
-
-    // 非 429 错误（网络问题等），不再尝试下一个凭据
-    if (status !== 429) break
-    // 429 → 继续尝试下一个凭据源
-  }
-
-  // 所有凭据都失败
+/**
+ * 写入失败缓存并返回兜底数据
+ */
+function handleUsageFailure(planName, cached) {
   const lastGood = getLastGoodData()
-  const planName = getPlanName(credSources[0].subscriptionType) || 'Unknown'
   const fail = { planName, fiveHour: null, sevenDay: null, apiUnavailable: true }
   writeUsageCache(fail, lastGood)
   return lastGood || cached || null
+}
+
+/**
+ * 获取 usage 数据
+ *
+ * 刷新策略：
+ * - 成功缓存有效期 5 分钟，到期后下次渲染时自动刷新
+ * - 失败缓存有效期 60 秒，到期后重试
+ * - statusline 每次工具调用后都会渲染，因此刷新频率取决于操作频率
+ *
+ * 凭据降级：
+ * 1. 文件凭据（~/.claude/.credentials.json，CLI 登录写入）→ 调 API
+ * 2. 若文件凭据不存在或 API 返回 429 → 降级到 Keychain 凭据（Desktop 写入）→ 调 API
+ * 3. 都失败 → 返回上次成功的缓存数据，等下次渲染时重试
+ */
+async function getUsageData() {
+  // 缓存未过期，直接返回
+  const cached = readUsageCache()
+  if (cached && !cached._stale) return cached
+
+  // 第一步：尝试文件凭据（CLI）
+  const fileCreds = readFileToken()
+  if (fileCreds) {
+    const planName = getPlanName(fileCreds.subscriptionType)
+    if (planName) {
+      const { data: apiData, status } = await fetchUsageApi(fileCreds.token)
+      if (apiData) return buildUsageResult(planName, apiData)
+      // 非 429 错误（网络/超时），直接兜底，不降级
+      if (status !== 429) return handleUsageFailure(planName, cached)
+    }
+  }
+
+  // 第二步：降级到 Keychain 凭据（Desktop）
+  const keychainCreds = readKeychainToken()
+  if (keychainCreds) {
+    const planName = getPlanName(keychainCreds.subscriptionType)
+    if (planName) {
+      const { data: apiData } = await fetchUsageApi(keychainCreds.token)
+      if (apiData) return buildUsageResult(planName, apiData)
+      return handleUsageFailure(planName, cached)
+    }
+  }
+
+  // 无任何凭据
+  return cached || null
 }
 
 // ── Main ──
