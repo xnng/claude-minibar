@@ -74,30 +74,36 @@ function getEffortLevel() {
 }
 
 // ── Session duration ──
+function formatDuration(ms) {
+  if (ms < 0) return null
+  const mins = Math.floor(ms / 60000)
+  if (mins < 1) return '<1m'
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  const remMins = mins % 60
+  return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`
+}
+
 function getSessionDuration(transcriptPath) {
   if (!transcriptPath || !existsSync(transcriptPath)) return null
   try {
-    // 只读前 4KB 找第一条带 timestamp 的记录
-    const fd = openSync(transcriptPath, 'r')
-    const buf = Buffer.alloc(Math.min(4096, statSync(transcriptPath).size))
-    readSync(fd, buf, 0, buf.length, 0)
-    closeSync(fd)
-    for (const line of buf.toString('utf8').split('\n')) {
-      if (!line.trim()) continue
-      try {
-        const entry = JSON.parse(line)
-        if (entry.timestamp) {
-          const ms = Date.now() - new Date(entry.timestamp).getTime()
-          if (ms < 0) return null
-          const mins = Math.floor(ms / 60000)
-          if (mins < 1) return '<1m'
-          if (mins < 60) return `${mins}m`
-          const hours = Math.floor(mins / 60)
-          const remMins = mins % 60
-          return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`
-        }
-      } catch {}
+    const fileSize = statSync(transcriptPath).size
+    if (fileSize > 0) {
+      const fd = openSync(transcriptPath, 'r')
+      const buf = Buffer.alloc(Math.min(4096, fileSize))
+      readSync(fd, buf, 0, buf.length, 0)
+      closeSync(fd)
+      for (const line of buf.toString('utf8').split('\n')) {
+        if (!line.trim()) continue
+        try {
+          const entry = JSON.parse(line)
+          if (entry.timestamp) return formatDuration(Date.now() - new Date(entry.timestamp).getTime())
+        } catch {}
+      }
     }
+    // fallback: use file creation time as session start
+    const birthtime = statSync(transcriptPath).birthtimeMs
+    if (birthtime > 0) return formatDuration(Date.now() - birthtime)
   } catch {}
   return null
 }
