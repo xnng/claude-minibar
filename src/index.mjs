@@ -351,7 +351,7 @@ async function main() {
   const effortDisplay = effort ? ` | ${effort}` : ''
 
   const duration = getSessionDuration(stdin.transcript_path)
-  const durationDisplay = duration ? ` ${dim(`${duration}`)}` : ''
+  const durationDisplay = duration ? ` ${dim(`⏱️  ${duration}`)}` : ''
 
   let line1 = `${cyan(`[${modelName}${effortDisplay}]`)} ${dim('Context')} ${contextColor(percent)}${percent}%${RESET}${durationDisplay}`
 
