@@ -8,6 +8,7 @@ Minimal 2-line statusline for [Claude Code](https://docs.anthropic.com/en/docs/c
 
 - **Model & Effort** — Current model name and thinking effort level (High/Med/Low)
 - **Context** — Context window usage with color coding (green → yellow → red)
+- **Session Duration** — How long the current session has been running
 - **File Changes** — Real-time session diff stats (files changed, lines +/-) via incremental transcript parsing
 - **Usage Quota** — 5h / 7d usage with progress bars and reset countdown (Pro/Max/Team)
 - **Zero Dependencies** — Pure Node.js, no build step, no external packages
@@ -22,13 +23,13 @@ In Claude Code, run:
 /plugin install claude-minibar@claude-minibar
 ```
 
-After installing, run the setup command:
+Restart Claude Code, then run the setup command:
 
 ```
 /claude-minibar:setup
 ```
 
-This will configure your `statusLine` in `settings.json` automatically. Restart Claude Code to see the statusline.
+This will configure your `statusLine` in `settings.json` automatically. Restart Claude Code again to see the statusline.
 
 ## How It Works
 
@@ -37,18 +38,9 @@ This will configure your `statusLine` in `settings.json` automatically. Restart 
 | Model name | stdin JSON from Claude Code |
 | Effort level | `~/.claude/settings.json` |
 | Context % | stdin `context_window.used_percentage` |
+| Session duration | First timestamp in session transcript JSONL |
 | File changes | Incremental parsing of session transcript JSONL |
 | Usage quota | Anthropic OAuth API via macOS Keychain credentials |
-
-### Usage Quota Credentials
-
-By default, claude-minibar reads OAuth credentials from macOS Keychain (stored by Claude Code CLI).
-
-If you have [Claude Code Desktop](https://claude.ai/download) installed, you can configure minibar to use its credentials instead — useful when the CLI keychain entry is unavailable or expired:
-
-```
-/claude-minibar:configure
-```
 
 ## Requirements
 

@@ -198,6 +198,18 @@ function getFileChanges(transcriptPath) {
 }
 
 // ── Usage API ──
+const HUD_CACHE_PATH = join(HOME, '.claude', 'plugins', 'claude-hud', '.usage-cache.json')
+
+function readHudCache() {
+  try {
+    if (!existsSync(HUD_CACHE_PATH)) return null
+    const cache = JSON.parse(readFileSync(HUD_CACHE_PATH, 'utf8'))
+    const data = cache.lastGoodData || cache.data
+    if (data && !data.apiUnavailable && data.fiveHour != null) return data
+    return null
+  } catch { return null }
+}
+
 function readUsageCache() {
   try {
     if (!existsSync(USAGE_CACHE_PATH)) return null
@@ -313,16 +325,17 @@ function clamp(v) {
 async function getUsageData() {
   const cached = readUsageCache()
   if (cached && !cached._stale) return cached
+  const hudCached = readHudCache()
   const creds = readKeychainToken()
-  if (!creds) return cached || null
+  if (!creds) return cached || hudCached || null
   const planName = getPlanName(creds.subscriptionType)
-  if (!planName) return cached || null
+  if (!planName) return cached || hudCached || null
   const apiData = await fetchUsageApi(creds.token)
   if (!apiData) {
-    const lastGood = getLastGoodData()
+    const lastGood = getLastGoodData() || hudCached
     const fail = { planName, fiveHour: null, sevenDay: null, apiUnavailable: true }
     writeUsageCache(fail, lastGood)
-    return lastGood || cached || null
+    return lastGood || cached || hudCached || null
   }
   const result = {
     planName,
