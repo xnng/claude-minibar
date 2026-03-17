@@ -42,15 +42,15 @@ This will configure your `statusLine` in `settings.json` automatically. Restart 
 | File changes | Incremental parsing of session transcript JSONL |
 | Usage quota | Anthropic OAuth API via macOS Keychain credentials |
 
-## Usage Quota Data
+## Usage Quota
 
-Usage quota (5h/7d) is fetched from the Anthropic OAuth API. The credential acquisition flow:
+Usage quota (5h/7d) requires a Pro/Max/Team subscription. The data flow:
 
-1. **macOS Keychain** — Reads OAuth token stored by Claude Code CLI login. This is the primary method.
-2. **claude-hud cache fallback** — If the API call fails (rate-limited, network error, etc.), minibar will try to read cached usage data from the [claude-hud](https://github.com/jarrodwatts/claude-hud) plugin (`~/.claude/plugins/claude-hud/.usage-cache.json`). This requires claude-hud to have been installed previously. If you've never installed claude-hud, the usage line won't show until the API call succeeds.
-3. **Self cache** — Once a successful API call is made, the result is cached for 5 minutes. Subsequent renders use the cache without hitting the API.
+1. **Read credentials** — OAuth token from macOS Keychain, stored by Claude Code CLI or [Claude Code Desktop](https://claude.ai/download)
+2. **Call API** — Fetches usage from Anthropic OAuth API
+3. **Cache** — Successful results are cached for 5 minutes. If the API is temporarily unavailable (rate-limited, network error), the last successful result is shown until the next successful refresh
 
-> **Tip**: If you have [Claude Code Desktop](https://claude.ai/download) installed, it stores OAuth credentials in macOS Keychain which minibar can read directly. This is useful when the CLI-stored token is unavailable or expired.
+API key users (no OAuth login) won't see the usage line — this is expected.
 
 ## Requirements
 
