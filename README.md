@@ -2,17 +2,14 @@
 
 Minimal 2-line statusline for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 
-```
-[Opus 4.6 (1M context) | High] Context 12% | 5 files +925 -120
-Usage ░░░░░░░░░░ 3% (3h 52m / 5h) | ██░░░░░░░░ 23% (3d / 7d)
-```
+![preview](preview.png)
 
 ## Features
 
-- **Model & Effort** — Shows current model name and thinking effort level (High/Med/Low)
-- **Context** — Context window usage percentage with color coding (green → yellow → red)
-- **File Changes** — Real-time session diff stats (files changed, lines added/removed) via incremental transcript parsing
-- **Usage Quota** — 5-hour and 7-day usage with progress bars and reset countdown (Pro/Max/Team)
+- **Model & Effort** — Current model name and thinking effort level (High/Med/Low)
+- **Context** — Context window usage with color coding (green → yellow → red)
+- **File Changes** — Real-time session diff stats (files changed, lines +/-) via incremental transcript parsing
+- **Usage Quota** — 5h / 7d usage with progress bars and reset countdown (Pro/Max/Team)
 - **Zero Dependencies** — Pure Node.js, no build step, no external packages
 - **Fast** — Incremental parsing with file-based caching; only new transcript entries are processed
 
@@ -21,6 +18,14 @@ Usage ░░░░░░░░░░ 3% (3h 52m / 5h) | ██░░░░░░
 ```bash
 /install-plugin xnng/claude-minibar
 ```
+
+After installing, run the setup command in Claude Code:
+
+```
+/claude-minibar:setup
+```
+
+This will configure your `statusLine` in `settings.json` automatically.
 
 ## How It Works
 
@@ -31,6 +36,16 @@ Usage ░░░░░░░░░░ 3% (3h 52m / 5h) | ██░░░░░░
 | Context % | stdin `context_window.used_percentage` |
 | File changes | Incremental parsing of session transcript JSONL |
 | Usage quota | Anthropic OAuth API via macOS Keychain credentials |
+
+### Usage Quota Credentials
+
+By default, claude-minibar reads OAuth credentials from macOS Keychain (stored by Claude Code CLI).
+
+If you have [Claude Code Desktop](https://claude.ai/download) installed, you can configure minibar to use its credentials instead — useful when the CLI keychain entry is unavailable or expired:
+
+```
+/claude-minibar:configure
+```
 
 ## Requirements
 
