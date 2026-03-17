@@ -1,0 +1,13 @@
+{
+  "name": "claude-minibar",
+  "description": "Minimal 2-line statusline for Claude Code — model, effort level, context, file changes, and usage quota",
+  "version": "1.0.0",
+  "author": {
+    "name": "xnng",
+    "url": "https://github.com/xnng"
+  },
+  "homepage": "https://github.com/xnng/claude-minibar",
+  "repository": "https://github.com/xnng/claude-minibar",
+  "license": "MIT",
+  "keywords": ["statusline", "minibar", "context", "usage", "effort", "diff", "claude-code"]
+}

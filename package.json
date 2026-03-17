@@ -1,0 +1,20 @@
+{
+  "name": "claude-minibar",
+  "version": "1.0.0",
+  "description": "Minimal 2-line statusline for Claude Code",
+  "type": "module",
+  "main": "src/index.mjs",
+  "scripts": {
+    "test:stdin": "echo '{\"model\":{\"display_name\":\"Opus 4.6 (1M context)\"},\"context_window\":{\"used_percentage\":25}}' | node src/index.mjs"
+  },
+  "keywords": [
+    "claude-code",
+    "statusline",
+    "minibar"
+  ],
+  "author": "xnng",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

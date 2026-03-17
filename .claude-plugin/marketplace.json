@@ -1,0 +1,19 @@
+{
+  "name": "claude-minibar",
+  "owner": {
+    "name": "xnng"
+  },
+  "metadata": {
+    "description": "Minimal 2-line statusline for Claude Code — model, effort level, context, file changes, and usage quota",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "claude-minibar",
+      "source": "./",
+      "description": "Zero-config, 2-line statusline showing model name, thinking effort, context usage, session file changes (+/-), and 5h/7d usage quota with progress bars.",
+      "category": "monitoring",
+      "tags": ["statusline", "minibar", "context", "usage", "effort", "diff"]
+    }
+  ]
+}

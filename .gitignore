@@ -1,0 +1,4 @@
+node_modules/
+*.log
+.usage-cache.json
+.diff-cache.json
