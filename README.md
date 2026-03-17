@@ -47,39 +47,48 @@ This will configure your `statusLine` in `settings.json` automatically. Restart 
 Usage quota (5h/7d) requires a Pro/Max/Team subscription. API key users won't see this line.
 
 ```mermaid
-flowchart TD
-    A[statusline render] --> B{self cache valid?}
-    B -->|"< 5min"| Z[return cached data]
-    B -->|"failed cache < 60s\nwith lastGoodData"| Z2[return lastGoodData]
-    B -->|expired / empty| C{read file credentials\n~/.claude/.credentials.json}
+sequenceDiagram
+    participant M as Minibar
+    participant C as Cache
+    participant F as File Credentials<br/>~/.claude/.credentials.json
+    participant API as Anthropic Usage API
+    participant K as Keychain Credentials<br/>Claude Code Desktop
 
-    C -->|found| D[call Anthropic Usage API]
-    C -->|not found| F
-
-    D -->|200 OK| E[write cache, return data]
-    D -->|429| F{read Keychain credentials\nClaude Code Desktop}
-    D -->|other error| G
-
-    F -->|found| H[call Anthropic Usage API]
-    F -->|not found| G
-
-    H -->|200 OK| E
-    H -->|failed| G
-
-    G{lastGoodData exists?}
-    G -->|yes| I[write failed cache 60s\nreturn lastGoodData]
-    G -->|no| J[no Usage line displayed\nretry on next render]
-
-    style F fill:#f9f0ff,stroke:#9b59b6
-    style Z fill:#e8f5e9,stroke:#4caf50
-    style Z2 fill:#e8f5e9,stroke:#4caf50
-    style E fill:#e8f5e9,stroke:#4caf50
-    style J fill:#fff3e0,stroke:#ff9800
+    M->>C: read cache
+    alt cache valid (< 5min)
+        C-->>M: return cached data
+    else expired or empty
+        M->>F: read CLI token
+        F-->>M: token (or empty)
+        opt token found
+            M->>API: GET /api/oauth/usage
+            alt 200 OK
+                API-->>M: usage data
+                M->>C: write cache (TTL 5min)
+            else 429 Rate Limited
+                Note over M: degrade to Desktop credentials
+                M->>K: read Keychain token
+                K-->>M: token (or empty)
+                opt token found
+                    M->>API: GET /api/oauth/usage
+                    alt 200 OK
+                        API-->>M: usage data
+                        M->>C: write cache (TTL 5min)
+                    else failed
+                        M->>C: write failed cache (TTL 60s)
+                    end
+                end
+            else other error
+                M->>C: write failed cache (TTL 60s)
+            end
+        end
+    end
 ```
 
-**Refresh**: Successful cache expires after **5 minutes**. Failed cache expires after **60 seconds**. The statusline re-renders on every tool call, triggering a refresh when cache expires.
-
-**Degradation**: File credentials (CLI login) are the primary source. Keychain credentials (Desktop) are only used as a fallback when the API returns 429. If you experience persistent 429 errors, installing [Claude Code Desktop](https://claude.ai/download) provides an alternative credential source.
+- **Primary**: File credentials from CLI login (`~/.claude/.credentials.json`)
+- **Degradation**: If API returns 429, retry with Keychain credentials from [Claude Code Desktop](https://claude.ai/download)
+- **Refresh**: Success cached 5 min, failure cached 60s. Statusline re-renders on each tool call, triggering refresh when cache expires
+- API key users (no OAuth login) won't see the usage line
 
 ## Requirements
 
